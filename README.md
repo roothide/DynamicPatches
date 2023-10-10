@@ -101,7 +101,10 @@ so in the end the patches we got is as follows:
    and if a path needs to be saved to the config/plist file, we also need to perform this conversion, 
    since the randomized path converted by jbroot will be invalid in the next time we jailbreak.
    
-4. after a path string are put into a register, this register may be used in multiple places in subsequent code.
+3. after a path string are put into a register, this register may be used in multiple places in subsequent code.
    usually we patch it in the first place where it is used, but we may need to convert it back to original path in the next place of code.
    we can use ```action``` of ```jbroot```<=>```rootfs``` to convert path strings back and forth.
 
+4. usually a patch will only replace one line of code, but in some cases a patch may also require space for three lines of code,
+   so it is recommended that the address of 2 code patches should be separated by 3x4=12 bytes.
+   

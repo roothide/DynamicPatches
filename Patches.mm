@@ -180,13 +180,6 @@ NSDictionary* gPatchesConfig = @{
         
     ],
 
-    @"/Applications/Filza.app/PlugIns/Sharing.appex/Sharing" : @[
-    ],
-
-    
-    @"/usr/libexec/filza/Filza" : @[
-    ],
-
     @"/usr/libexec/filza/FilzaHelper" : @[
         // TGSystem
         @{@"vaddr": @0x0100005CC4, @"regs":@[ @(0) ], @"type":@"cstring", @"action":@"pathenv_jbroot"},
@@ -207,6 +200,12 @@ NSDictionary* gPatchesConfig = @{
         @{@"vaddr": @0x010000B478, @"regs":@[ @(4) ], @"type":@"NSString", @"action":@"jbroot"},
     ],
 
+    @"/Applications/Filza.app/PlugIns/Sharing.appex/Sharing" : @[
+    ],
+
+    
+    @"/usr/libexec/filza/Filza" : @[
+    ],
 };
 
 NSLock* gPatchesLock = nil;

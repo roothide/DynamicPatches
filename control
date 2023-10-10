@@ -2,11 +2,11 @@ Package: roothide.patches.filza
 Name: Patches for Filza 64bit
 Version: 0.1
 Architecture: iphoneos-arm
-Depends: com.roothide.patchloader
 Description: RootHide Dynamic Patches For Filza
 Maintainer: roothide
 Author: roothide
 Section: RootHide Patches
-Provides: patches-com.tigisoftware.filza64bit(=4.0.1-4-roothide)
-Recommends: com.tigisoftware.filza64bit(=4.0.1-4-roothide)
-Conflicts: com.tigisoftware.filza64bit(>>4.0.1-4-roothide), com.tigisoftware.filza64bit(<<4.0.1-4-roothide)
+Depends: com.roothide.patchloader
+Provides: patches-com.tigisoftware.filza64bit(= 4.0.1-4-roothide)
+Recommends: com.tigisoftware.filza64bit(= 4.0.1-4-roothide)
+Conflicts: com.tigisoftware.filza64bit(>> 4.0.1-4-roothide), com.tigisoftware.filza64bit(<< 4.0.1-4-roothide)

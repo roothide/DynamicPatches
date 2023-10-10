@@ -96,7 +96,7 @@ so in the end the patches we got is as follows:
 
 1. we can also use ```@"type":@"NSString"``` to patch some path string variables returned by Objective-C methods.
    
-2. some jailbreak apps/tweaks may execute command line programs of bootstrap, which only accept jbroot-based paths.
+2. some jailbreak apps/tweaks may execute command line programs of bootstrap, which only accept jbroot-based paths as arguments.
    we can use ```@:"action":@"rootfs"``` to convert the rootfs-based paths to jbroot-based paths in code.
    and if a path needs to be saved to the config/plist file, we also need to perform this conversion, 
    since the randomized path converted by jbroot will be invalid in the next time we jailbreak.

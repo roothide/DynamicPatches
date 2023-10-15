@@ -9,7 +9,7 @@ LIBRARY_NAME = FilzaPatches
 
 $(LIBRARY_NAME)_FILES = Patches.mm
 $(LIBRARY_NAME)_CFLAGS = -fobjc-arc
-$(LIBRARY_NAME)_LDFLAGS = -L./ -ldobby -lsubstrate
+$(LIBRARY_NAME)_LDFLAGS = -L./ -ldobby
 $(LIBRARY_NAME)_INSTALL_PATH = /usr/lib/DynamicPatches
 
 include $(THEOS_MAKE_PATH)/library.mk

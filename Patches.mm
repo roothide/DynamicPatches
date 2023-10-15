@@ -1,5 +1,4 @@
 #include "Patches.h"
-#include <substrate.h>
 
 #define LOG(...) NSLog(@"FilzaPatches: " __VA_ARGS__)
 
@@ -205,6 +204,10 @@ NSDictionary* gPatchesConfig = @{
 
     
     @"/usr/libexec/filza/Filza" : @[
+        //hacky way to skip check installed path
+        @{@"vaddr": @0x1000075C0, @"regs":@[ @(21) ], @"type":@"cstring", @"action":@"rootfs"},
+
+        @{@"vaddr": @0x100007228, @"regs":@[ @(0) ], @"type":@"cstring", @"action":@"pathenv_jbroot"},
     ],
 };
 
@@ -365,17 +368,17 @@ void new_InitPaths()
         "_p7zipPath", //required bcz /usr/bin/7z is a shell wrapper
     };
 
-    static MSImageRef image = MSGetImageByName(jbroot("/Applications/Filza.app/Filza"));
+    const char* FilzaPath = jbroot("/Applications/Filza.app/Filza");
 
     for(int i=0; i<sizeof(pathvars)/sizeof(pathvars[0]); i++) {
-        char* _var = (char*)MSFindSymbol(image, pathvars[i]);
+        char* _var = (char*)DobbySymbolResolver(FilzaPath, pathvars[i]);
         LOG(@"pathvar[%d] %s %s", i, pathvars[i], _var);
         assert(_var != NULL);
         strcpy(_var, jbroot(_var[0]?_var:"/"));
     }
 
     //fix the bug that webdavserver cannot be actively started in settings of filza
-    char* _LaunchStartWD = (char*)MSFindSymbol(image, "_LaunchStartWD");
+    char* _LaunchStartWD = (char*)DobbySymbolResolver(FilzaPath, "_LaunchStartWD");
     strcpy(_LaunchStartWD, "launchctl start com.tigisoftware.filza.webdavserver");
 }
 
@@ -442,22 +445,20 @@ void InitPatches(const char* path, void* header, uint64_t slide)
         gPatchesRuntime = [[NSMutableDictionary alloc] init];
     }
 
-    if(pathFileEqual(path, jbroot("/Applications/Filza.app/Filza")))
+    const char* FilzaPath = jbroot("/Applications/Filza.app/Filza");
+    if(pathFileEqual(path, FilzaPath))
     {
-        MSImageRef FilzaImage = MSGetImageByName(jbroot("/Applications/Filza.app/Filza"));
-        LOG(@"hook Filza.app/Filza=%p", FilzaImage);
-
-        void* _InitPaths = MSFindSymbol(FilzaImage, "_InitPaths");
+        void* _InitPaths = DobbySymbolResolver(FilzaPath, "_InitPaths");
         assert(_InitPaths != NULL);
-        MSHookFunction((void*)_InitPaths, (void*)new_InitPaths, (void**)&orig_InitPaths);
+        DobbyHook((void*)_InitPaths, (void*)new_InitPaths, (void**)&orig_InitPaths);
 
-        void* importSettingsFromNoContainerFilza = MSFindSymbol(FilzaImage, "_objc_msgSend$importSettingsFromNoContainerFilza");
+        void* importSettingsFromNoContainerFilza = DobbySymbolResolver(FilzaPath, "_objc_msgSend$importSettingsFromNoContainerFilza");
         assert(importSettingsFromNoContainerFilza != NULL);
-        MSHookFunction((void*)importSettingsFromNoContainerFilza, (void*)new_importSettingsFromNoContainerFilza, (void**)&orig_importSettingsFromNoContainerFilza);
+        DobbyHook((void*)importSettingsFromNoContainerFilza, (void*)new_importSettingsFromNoContainerFilza, (void**)&orig_importSettingsFromNoContainerFilza);
     }
 
     //test
-    //MSHookFunction((void*)posix_spawn, (void*)new_posix_spawn, (void**)&orig_posix_spawn);
+    //DobbyHook((void*)posix_spawn, (void*)new_posix_spawn, (void**)&orig_posix_spawn);
 
     dobby_enable_near_branch_trampoline();
 

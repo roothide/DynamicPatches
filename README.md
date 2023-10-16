@@ -21,8 +21,8 @@ we need to create a specific separate patches package for a specific jailbreak a
 the original package needs to be processed as follows:
 
 1. repackage according to roothide specifications.
-2. modify the ```Version``` field in the control file and add the ```-rootide``` suffix
-3. add ```Pre-Depends: patches-PackageID(= PackageVersion-roothide)``` to control file
+2. modify the ```Version``` field in the control file and add the ```~rootide``` suffix
+3. add ```Pre-Depends: patches-PackageID(= PackageVersion~roothide)``` to control file
 
 usually these are handled automatically by the RootHidePatcher app.
 
@@ -30,9 +30,9 @@ and the control file of the patches package needs to add the following fields:
 ```
 Section: RootHide Patches
 Depends: com.roothide.patchloader
-Provides: patches-PackageID(= PackageVersion-roothide)
-Recommends: PackageID(= PackageVersion-roothide)
-Conflicts: PackageID(>> PackageVersion-roothide), PackageID(<< PackageVersion-roothide)
+Provides: patches-PackageID(= PackageVersion~roothide)
+Recommends: PackageID(= PackageVersion~roothide)
+Conflicts: PackageID(>> PackageVersion~roothide), PackageID(<< PackageVersion~roothide)
 ```
 
 **all PackageIDs and PackageVersion above need to be consistent with the original package.**

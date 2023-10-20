@@ -2,35 +2,20 @@ ARCHS = arm64 arm64e
 TARGET := iphone:clang:latest:15.0
 
 THEOS_PACKAGE_SCHEME = roothide
+FINALPACK=1
+DEBUG=0
 
 include $(THEOS)/makefiles/common.mk
 
-LIBRARY_NAME = FilzaPatches
+LIBRARY_NAME = AutoPatches
 
-$(LIBRARY_NAME)_FILES = Patches.mm
-$(LIBRARY_NAME)_CFLAGS = -fobjc-arc
-$(LIBRARY_NAME)_LDFLAGS = -L./ -ldobby -lsubstrate
+$(LIBRARY_NAME)_FILES = Patches.cpp
+$(LIBRARY_NAME)_CFLAGS = -fvisibility=hidden -fobjc-arc
+$(LIBRARY_NAME)_CCFLAGS = -fvisibility=hidden -std=c++11
+$(LIBRARY_NAME)_LDFLAGS = -L./ -ldobby #elleki may crash when be loaded in image_load_notiry -lsubstrate
 $(LIBRARY_NAME)_INSTALL_PATH = /usr/lib/DynamicPatches
 
 include $(THEOS_MAKE_PATH)/library.mk
 
-
-PATCH_FILES = \
-	"/Applications/Filza.app/Filza" \
-	"/Applications/Filza.app/PlugIns/Sharing.appex/Sharing" \
-	"/usr/libexec/filza/Filza" \
-	"/usr/libexec/filza/FilzaHelper" \
-	"/usr/libexec/filza/FilzaWebDAVServer"
-
-
-before-package::
-	for file in $(PATCH_FILES); do \
-		echo add patch file $$file at $$(dirname "$$file"); \
-		dir=$$(dirname "$$file"); \
-		mkdir -p "$(THEOS_STAGING_DIR)/$$dir" ; \
-		ln -s "/usr/lib/DynamicPatches/$(LIBRARY_NAME).dylib" "$(THEOS_STAGING_DIR)/$$file.roothidepatch"; \
-	done;
-
 clean::
 	rm -rf ./packages/*
-	

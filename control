@@ -1,12 +1,9 @@
-Package: roothide.patches.filza
-Name: Patches for Filza 64bit
+Package: rootless-compat
+Name: rootless-compat
 Version: 0.1
 Architecture: iphoneos-arm
-Description: RootHide Dynamic Patches For Filza
+Description: Compat Layer for Rootless Tweaks
 Maintainer: roothide
 Author: roothide
 Section: RootHide Patches
-Depends: com.roothide.patchloader, mobilesubstrate
-Provides: patches-com.tigisoftware.filza64bit(= 4.0.1-4-roothide)
-Recommends: com.tigisoftware.filza64bit(= 4.0.1-4-roothide)
-Conflicts: com.tigisoftware.filza64bit(>> 4.0.1-4-roothide), com.tigisoftware.filza64bit(<< 4.0.1-4-roothide)
+Depends: com.roothide.patchloader(>= 0.0.2)

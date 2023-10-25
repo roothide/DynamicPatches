@@ -6,13 +6,13 @@
 #include <dirent.h>
 #include <string>
 #include <map>
-#include <CoreFoundation/CoreFoundation.h>
+//#include <CoreFoundation/CoreFoundation.h>
 
 using namespace std;
 
 #include <sys/syslog.h>
 //don't reboot userspace when enabled this
-#define LOG(...)  //{openlog("AutoPatches",LOG_PID,LOG_AUTH);syslog(LOG_DEBUG, "AutoPatches: " __VA_ARGS__);closelog();}
+#define LOG(...)      //  {openlog("AutoPatches",LOG_PID,LOG_AUTH);syslog(LOG_DEBUG, "AutoPatches: " __VA_ARGS__);closelog();}
 
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 #pragma GCC diagnostic ignored "-Wunused-variable"
@@ -108,6 +108,11 @@ void patch_pointers(map<uint64_t,string>& cstrings, uint64_t addr, uint64_t size
     }
 }
 
+
+
+#define arm64_trunc_page(x) ((x) & (~(0x1000 - 1)))
+#define arm64_round_page(x) trunc_page((x) + (0x1000 - 1))
+
 // borrow from gdb, refer: binutils-gdb/gdb/arch/arm.h
 #define submask(x) ((1L << ((x) + 1)) - 1)
 #define bits(obj, st, fn) (((obj) >> (st)) & submask((fn) - (st)))
@@ -119,7 +124,7 @@ static inline int decode_rd(uint32_t instr) {
 }
 
 static inline int decode_rn(uint32_t instr) {
-  return bits(instr, 5, 4);
+  return bits(instr, 5, 9);
 }
 
 static inline int64_t SignExtend(unsigned long x, int M, int N) {
@@ -165,12 +170,13 @@ static inline int64_t decode_add_imm12_value(uint32_t instr)
     return offset;
 }
 
-void patch_textcode(map<uint64_t,string>& cstrings, uint64_t addr, uint64_t size)
+void patch_textcode(map<uint64_t,string>& cstrings, void* header, uint64_t addresss, uint64_t size)
 {
-    uint32_t* p = (uint32_t*)addr;
-    while(p < (uint32_t*)(addr+size))
+    uint32_t* p = (uint32_t*)addresss;
+    while(p < (uint32_t*)(addresss+size))
     {
         uint32_t code = *p;
+        uint64_t module_offset = (uint64_t)p - (uint64_t)header;
 
         // is ADR/ADRP
         if( (code&0x1F000000)==0x10000000 )
@@ -182,12 +188,12 @@ void patch_textcode(map<uint64_t,string>& cstrings, uint64_t addr, uint64_t size
                 int64_t offset = decode_adr_imm_value(code);
                 uint64_t addr = (uint64_t)p + offset;
                 
-                //LOG("%p:ADR rd=%d, offset=%llx, addr=%llx", p, rd, offset, addr);
+                //LOG("%p/%llX:ADR rd=%d, offset=%llx, addr=%llx", p, module_offset, rd, offset, addr);
 
                 auto it = cstrings.find(addr);
                 if(it != cstrings.end()) 
                 {
-                    LOG("string ref ADR: %p %llx, %s", p, addr, (char*)addr);
+                    LOG("string ref ADR: %p/%llX %llx, %s", p, module_offset, addr, (char*)addr);
                     uint32_t nop = 0xD503201F;
                     if(DobbyCodePatch((void*)p, (uint8_t*)&nop, sizeof(nop)) == 0)
                         add_codepatch((void*)p, rd, (char*)addr);
@@ -202,9 +208,9 @@ void patch_textcode(map<uint64_t,string>& cstrings, uint64_t addr, uint64_t size
                 {
                     int rd = decode_rd(code);
                     int64_t page = decode_adrp_imm_value(code);
-                    uint64_t addr = ((uint64_t)p & ~(PAGE_SIZE-1)) + page;
+                    uint64_t addr = arm64_trunc_page((uint64_t)p + page);
 
-                    //LOG("%p:ADRP rd=%d, page=%llx, addr=%llx", p, rd, page, addr);
+                    //LOG("%p/%llX:ADRP rd=%d, page=%llx, addr=%llx", p, module_offset, rd, page, addr);
                     
                     int rd2 = decode_rd(code2);
                     int rn2 = decode_rn(code2);
@@ -213,14 +219,14 @@ void patch_textcode(map<uint64_t,string>& cstrings, uint64_t addr, uint64_t size
                     
                     addr += offset;
                     
-                    //LOG("%p:ADD rd=%d, rs=%d, offset=%llx, addr=%llx", p+1, rd2, rn2, offset, addr);
+                    //LOG("%p/%llX:ADD rd=%d, rn=%d, offset=%llx, addr=%llx", p, module_offset+4, rd2, rn2, offset, addr);
                     
                     if(rd==rd2 && rd==rn2)
                     {
                         auto it = cstrings.find(addr);
                         if(it != cstrings.end()) 
                         {
-                            LOG("string ref ADRL: %p %llx, %s", p, addr, (char*)addr);
+                            LOG("string ref ADRL: %p/%llX %llx, %s", p, module_offset, addr, (char*)addr);
                             uint64_t nops = 0xD503201FD503201F;
                             if(DobbyCodePatch((void*)p, (uint8_t*)&nops, sizeof(nops)) == 0)
                                 add_codepatch((void*)p, rd, (char*)addr);
@@ -292,7 +298,7 @@ void auto_patch_machO(struct mach_header_64* header, uint64_t slide)
     }
 
     uint64_t cstring_addr = ((uint64_t)slide + cstring_section->addr);
-    LOG("header=%p cstring=%llx,%llx", header, cstring_section->addr, cstring_section->size);
+    LOG("cstring_section=%llx, %llx", cstring_section->addr, cstring_section->size);
     map<uint64_t,string> cstrings = scan_cstrings(cstring_addr, cstring_section->size);
     LOG("cstrings count=%ld", cstrings.size());
 
@@ -300,14 +306,17 @@ void auto_patch_machO(struct mach_header_64* header, uint64_t slide)
         return;
 
     uint64_t text_addr = ((uint64_t)slide + text_section->addr);
-    patch_textcode(cstrings, text_addr, text_section->size);
+    LOG("text_section=%llx, %llx", text_section->addr, text_section->size);
+    patch_textcode(cstrings, header, text_addr, text_section->size);
 
     if(cfstring_section) {
+    LOG("cfstring_section=%llx, %llx", cfstring_section->addr, cfstring_section->size);
         uint64_t cfstring_addr = ((uint64_t)slide + cfstring_section->addr);
         patch_cfstrings(cstrings, cfstring_addr, cfstring_section->size);
     }
 
     if(data_section) {
+        LOG("data_section=%llx, %llx", data_section->addr, data_section->size);
         uint64_t data_addr = ((uint64_t)slide + data_section->addr);
         patch_pointers(cstrings, data_addr, data_section->size);
     }
@@ -351,13 +360,32 @@ void* my_fopen(const char* path, const char* mode)
         }
     }
 
+    if(strncmp(path, "/var/jb/", sizeof("/var/jb/")-1) == 0)
+    {
+        path = jbroot(path);
+    }
+
     return fopen(path, mode);
 }
+
+FILE * my_freopen( const char *path, const char *mode, FILE *stream )
+{
+    LOG("freopen=%s, %s, %p", path, mode, stream);
+
+    return freopen(path,mode,stream);
+}
+
 
 void* my_opendir(char* path)
 {
     LOG("opendir=%s", path);
     return opendir(path);
+}
+
+int my_open(const char* path, int mode, int flag)
+{
+    LOG("open %s %x %x", path, mode, flag);
+    return open(path, mode, flag);
 }
 
 int my_stat(char* path, struct stat* st)
@@ -433,11 +461,11 @@ __attribute__((naked)) void* my_$sSS6appendyySSF()
 }
 }
 
-CFStringRef my_CFStringCreateWithCString(CFAllocatorRef alloc, const char *cStr, CFStringEncoding encoding)
-{
-    LOG("CFStringCreateWithCString: %s", cStr);
-    return CFStringCreateWithCString(alloc, cStr, encoding);
-}
+// CFStringRef my_CFStringCreateWithCString(CFAllocatorRef alloc, const char *cStr, CFStringEncoding encoding)
+// {
+//     LOG("CFStringCreateWithCString: %s", cStr);
+//     return CFStringCreateWithCString(alloc, cStr, encoding);
+// }
 
 ssize_t  my_readlink(const char * path, char * buf, size_t bufsize)
 {
@@ -486,7 +514,7 @@ void InitPatches(const char* path, void* header, uint64_t slide)
     hash<string> h;
     const char* jbpath = rootfs(path);
     size_t pathval = h(string(jbpath));
-    LOG("**load %p,%p,%s,%lx", header, (void*)slide, jbpath, pathval);
+    LOG("**load %p, %p, %s, %lx", header, (void*)slide, jbpath, pathval);
 
     dobby_enable_near_branch_trampoline();
 
@@ -507,10 +535,16 @@ void InitPatches(const char* path, void* header, uint64_t slide)
             autopatch = false;
             // hook Swift function/api ?
             hook_api_symbole(path, "$sSS6appendyySSF", (void*)my_$sSS6appendyySSF, (void**)&orig_$sSS6appendyySSF);
-            hook_api_symbole(path, "CFStringCreateWithCString", (void*)my_CFStringCreateWithCString);
+            //hook_api_symbole(path, "CFStringCreateWithCString", (void*)my_CFStringCreateWithCString);
             hook_api_symbole(path, "readlink", (void*)my_readlink);
             break;
 
+        case 0x9fa30a20e83aa366:
+            hook_api_symbole(path, "open", (void*)my_open);
+            hook_api_symbole(path, "fopen", (void*)my_fopen);
+            hook_api_symbole(path, "freopen", (void*)my_freopen);
+            hook_api_symbole(path, "access", (void*)my_access);
+            break;
     }
 
    if(autopatch) auto_patch_machO((struct mach_header_64*)header, slide);

@@ -6,11 +6,13 @@
 #include <dirent.h>
 #include <string>
 #include <map>
+#include <CoreFoundation/CoreFoundation.h>
 
 using namespace std;
 
 #include <sys/syslog.h>
-#define LOG(...)   //{openlog("AutoPatches",LOG_PID,LOG_AUTH);syslog(LOG_DEBUG, "AutoPatches: " __VA_ARGS__);closelog();}
+//don't reboot userspace when enabled this
+#define LOG(...)  //{openlog("AutoPatches",LOG_PID,LOG_AUTH);syslog(LOG_DEBUG, "AutoPatches: " __VA_ARGS__);closelog();}
 
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 #pragma GCC diagnostic ignored "-Wunused-variable"
@@ -364,6 +366,93 @@ int my_stat(char* path, struct stat* st)
     return stat(path, st);
 }
 
+
+extern "C" {
+void hook_$sSS6appendyySSF(uint64_t p)
+{
+    uint64_t a1 = *(uint64_t*)(p + 0);
+    uint64_t a2 = *(uint64_t*)(p + 8);
+    const char* str = NULL;
+
+    const char* varjb = "/var/jb";
+    const char* path = "/var/mobile/Library/Preferences/";
+
+    if(a1 == (0xd000000000000000+strlen(path)) 
+        && (a2 & 0x8000000000000000) != 0 )
+    {
+        // str = (const char*)( (a2 & ~0x8000000000000000) + 0x20);
+        // if(strncmp(str, path, strlen(path)) == 0)
+        // {
+        //     const char* newpath = jbroot(str);
+        //     uint64_t new_a2 = ( (uint64_t)newpath | 0x8000000000000000 ) - 0x20;
+        //     *(uint64_t*)(p + 8) = new_a2;
+        //     *(uint64_t*)(p + 0) = 0xd000000000000000+strlen(newpath);
+        // }
+    }
+    else if(a1==*(uint64_t*)varjb &&  a2==0xE700000000000000) {
+        str = varjb;
+        const char* newpath = jbroot(str);
+        uint64_t new_a2 = ( (uint64_t)newpath | 0x8000000000000000 ) - 0x20;
+        *(uint64_t*)(p + 8) = new_a2;
+        *(uint64_t*)(p + 0) = 0xd000000000000000+strlen(newpath);
+    }
+
+    LOG("hook_sSS6appendyySSF %p %p %s", (void*)a1, (void*)a2, str);
+}
+
+void* (*orig_$sSS6appendyySSF)()=NULL;
+__attribute__((naked)) void* my_$sSS6appendyySSF()
+{
+  __asm(
+    "sub sp,sp,0x100 \n"
+    "stp x0,x1,[sp,0] \n"
+    "stp x2,x3,[sp,0x10] \n"
+    "stp x4,x5,[sp,0x20] \n"
+    "stp x6,x7,[sp,0x30] \n"
+    "stp x8,x9,[sp,0x40] \n"
+    "stp x10,x11,[sp,0x50] \n"
+    "stp x12,x13,[sp,0x60] \n"
+    "stp x14,x15,[sp,0x70] \n"
+    "stp x29,x30,[sp,0x80] \n"
+    "mov x0, x20 \n"
+    "bl _hook_$sSS6appendyySSF\n"
+    "ldp x0,x1,[sp,0] \n"
+    "ldp x2,x3,[sp,0x10] \n"
+    "ldp x4,x5,[sp,0x20] \n"
+    "ldp x6,x7,[sp,0x30] \n"
+    "ldp x8,x9,[sp,0x40] \n"
+    "ldp x10,x11,[sp,0x50] \n"
+    "ldp x12,x13,[sp,0x60] \n"
+    "ldp x14,x15,[sp,0x70] \n"
+    "ldp x29,x30,[sp,0x80] \n"
+    "add sp,sp,0x100 \n"
+    "adrp x16, _orig_$sSS6appendyySSF@PAGE \n"
+	"ldr x16, [x16, _orig_$sSS6appendyySSF@PAGEOFF] \n"
+    "br x16 \n"
+    );
+}
+}
+
+CFStringRef my_CFStringCreateWithCString(CFAllocatorRef alloc, const char *cStr, CFStringEncoding encoding)
+{
+    LOG("CFStringCreateWithCString: %s", cStr);
+    return CFStringCreateWithCString(alloc, cStr, encoding);
+}
+
+ssize_t  my_readlink(const char * path, char * buf, size_t bufsize)
+{
+    LOG("readlink %s", path);
+    if(strncmp(path, "/var/jb", sizeof("/var/jb")-1)==0) {
+        const char* newpath = jbroot(path);
+        LOG("newpath %s", path);
+        snprintf(buf,bufsize,"%s", newpath);
+        return strlen(newpath);
+    }
+
+    return readlink(path,buf,bufsize);
+}
+
+
 bool pathFileEqual(const char* path1, const char* path2)
 {
 	if(!path1 || !path2) return false;
@@ -382,11 +471,12 @@ bool pathFileEqual(const char* path1, const char* path2)
 	return true;
 }
 
-void hook_api_symbole(const char* path, const char* sym, void* func)
+void hook_api_symbole(const char* path, const char* sym, void* func, void** orig=NULL)
 {
     LOG("hook %s for %s", sym, rootfs(path));
     dobby_dummy_func_t tmp;
     DobbyImportTableReplace((char*)path, (char*)sym, (dobby_dummy_func_t)func, (dobby_dummy_func_t*)&tmp);
+    if(orig) *orig = (void*)tmp;
 }
 
 extern "C"
@@ -400,7 +490,7 @@ void InitPatches(const char* path, void* header, uint64_t slide)
 
     dobby_enable_near_branch_trampoline();
 
-    auto_patch_machO((struct mach_header_64*)header, slide);
+    bool autopatch=true;
 
     switch(pathval)
     {
@@ -412,6 +502,17 @@ void InitPatches(const char* path, void* header, uint64_t slide)
         case 0xc5a37085e8684d22:
             hook_api_symbole(path, "fopen", (void*)my_fopen);
             break;
+
+        case 0xd1701f0d57c79a90:
+            autopatch = false;
+            // hook Swift function/api ?
+            hook_api_symbole(path, "$sSS6appendyySSF", (void*)my_$sSS6appendyySSF, (void**)&orig_$sSS6appendyySSF);
+            hook_api_symbole(path, "CFStringCreateWithCString", (void*)my_CFStringCreateWithCString);
+            hook_api_symbole(path, "readlink", (void*)my_readlink);
+            break;
+
     }
+
+   if(autopatch) auto_patch_machO((struct mach_header_64*)header, slide);
 
 }

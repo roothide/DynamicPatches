@@ -9,7 +9,7 @@ include $(THEOS)/makefiles/common.mk
 
 LIBRARY_NAME = AutoPatches
 
-$(LIBRARY_NAME)_FILES = Patches.cpp
+$(LIBRARY_NAME)_FILES = Patches.cpp Patches.m
 $(LIBRARY_NAME)_CFLAGS = -fvisibility=hidden -fobjc-arc
 $(LIBRARY_NAME)_CCFLAGS = -fvisibility=hidden -std=c++11
 $(LIBRARY_NAME)_LDFLAGS = -L./ -ldobby #elleki may crash when be loaded in image_load_notiry -lsubstrate

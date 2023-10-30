@@ -55,6 +55,9 @@ NSDictionary* gPatchesConfig = @{
         //[FavoritesTableViewController tableView:didSelectRowAtIndexPath:]
         @{@"vaddr": @0x010017EE18, @"regs":@[ @(0) ], @"type":@"NSString", @"action":@"jbroot"},
         @{@"vaddr": @0x010017F098, @"regs":@[ @(0) ], @"type":@"NSString", @"action":@"jbroot"},
+
+        //-[LeftPanelTableViewController tableView:didSelectRowAtIndexPath:]
+        @{@"vaddr": @0x0100140C2C, @"regs":@[ @(0) ], @"type":@"NSString", @"action":@"jbroot"},
         
         //_TGDatabaseInterface_libDirectoryPath__block_invoke
         @{@"vaddr": @0x01002329F8, @"regs":@[ @(0) ], @"type":@"cstring", @"action":@"jbroot"},

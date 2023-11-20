@@ -1,6 +1,6 @@
 Package: rootless-compat
 Name: rootless-compat
-Version: 0.4
+Version: 0.5
 Architecture: iphoneos-arm
 Description: Compat Layer for Rootless Tweaks
 Maintainer: roothide

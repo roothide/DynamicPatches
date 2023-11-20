@@ -1,18 +1,18 @@
 #include "Patches.h"
 #include <sys/fcntl.h>
+#include <mach-o/fat.h>
 #include <mach-o/loader.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <dirent.h>
 #include <string>
 #include <map>
-//#include <CoreFoundation/CoreFoundation.h>
 
 using namespace std;
 
 #include <sys/syslog.h>
 //don't reboot userspace when enabled this
-#define LOG(...)    //    {openlog("AutoPatches",LOG_PID,LOG_AUTH);syslog(LOG_DEBUG, "AutoPatches: " __VA_ARGS__);closelog();}
+#define LOG(...)  //  {openlog("AutoPatches",LOG_PID,LOG_AUTH);syslog(LOG_DEBUG, "AutoPatches: " __VA_ARGS__);closelog();}
 
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 #pragma GCC diagnostic ignored "-Wunused-variable"
@@ -352,10 +352,19 @@ void* my_fopen(const char* path, const char* mode)
             read(fd, &magic, sizeof(magic));
             close(fd);
 
-            if(magic==0xBEBAFECA||magic==0xCAFEBABE||magic==0xFEEDFACF)
-            {
-                LOG("use mirror file for %s", jbfile);
-                path = mirrorfile;
+            switch(magic) {
+                case FAT_MAGIC:
+                case FAT_CIGAM:
+                case FAT_MAGIC_64:
+                case FAT_CIGAM_64:
+                case MH_MAGIC_64:
+                case MH_CIGAM_64:
+                    LOG("use mirror file for %s", jbfile);
+                    path = mirrorfile;
+                    break;
+
+                default:
+                    break;
             }
         }
     }
@@ -382,15 +391,30 @@ void* my_opendir(char* path)
     return opendir(path);
 }
 
-int my_open(const char* path, int mode, int flag)
+// only variable parameters will be passed through the stack on arm
+int my_open(const char* path, int flags, ...)
 {
-    LOG("open %s %x %x", path, mode, flag);
-    return open(path, mode, flag);
+    mode_t mode = 0;
+    va_list ap;
+    va_start(ap, flags);
+    mode = va_arg(ap, int);
+    va_end(ap);
+
+    LOG("open %s %x %x", path, flags, mode);
+
+    return open(path, flags, mode);
 }
 
 int my_stat(char* path, struct stat* st)
 {
     LOG("stat=%s", path);
+    return stat(path, st);
+}
+
+int hacky_stat(char* path, struct stat* st)
+{
+    LOG("stat=%s", path);
+    if(strcmp(rootfs(path),"/var/jb/Library/dpkg/")==0) return -1;
     return stat(path, st);
 }
 
@@ -558,6 +582,14 @@ void InitPatches(const char* path, void* header, uint64_t slide)
         case 0x2ea4e9938f958ba5:
             hook_api_symbole(path, "access", (void*)my_access);
             hook_api_symbole(path, "posix_spawn", (void*)my_posix_spawn);
+            break;
+
+        case 0xd33bb38b6d0a9854:
+            hook_api_symbole(path, "stat", (void*)hacky_stat);
+            hook_api_symbole(path, "open", (void*)my_open);
+            hook_api_symbole(path, "fopen", (void*)my_fopen);
+            hook_api_symbole(path, "access", (void*)my_access);
+            break;
     }
 
    if(autopatch) auto_patch_machO((struct mach_header_64*)header, slide);

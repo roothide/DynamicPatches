@@ -3,6 +3,7 @@
         "string": "cpp",
         "filesystem": "cpp",
         "iosfwd": "cpp",
-        "map": "cpp"
+        "map": "cpp",
+        "locale": "cpp"
     }
 }

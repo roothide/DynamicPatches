@@ -12,7 +12,7 @@ using namespace std;
 
 #include <sys/syslog.h>
 //don't reboot userspace when enabled this
-#define LOG(...)  //  {openlog("AutoPatches",LOG_PID,LOG_AUTH);syslog(LOG_DEBUG, "AutoPatches: " __VA_ARGS__);closelog();}
+#define LOG(...)   // {openlog("AutoPatches",LOG_PID,LOG_AUTH);syslog(LOG_DEBUG, "AutoPatches: " __VA_ARGS__);closelog();}
 
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 #pragma GCC diagnostic ignored "-Wunused-variable"
@@ -327,6 +327,9 @@ void auto_patch_machO(struct mach_header_64* header, uint64_t slide)
 int my_access(char* path, int mode)
 {
     LOG("access=%s, %d", path, mode);
+
+    while(path[0]=='/' && path[1]=='/') path++;
+    
     if(strncmp(path, "/var/jb", sizeof("/var/jb")-1)==0) 
         path = (char*)jbroot(path);
     return access(path,mode);
@@ -507,11 +510,17 @@ ssize_t  my_readlink(const char * path, char * buf, size_t bufsize)
 #include <spawn.h>
 int my_posix_spawn(pid_t * pidp, const char * path, const posix_spawn_file_actions_t *fap, const posix_spawnattr_t * attrp, char *const __argv[], char *const __envp[]) 
 {
+    LOG("spawn %s", path);
+    
+    while(path[0]=='/' && path[1]=='/') path++;
+
     if(strncmp(path, "/var/jb", sizeof("/var/jb")-1)==0) {
         path = jbroot(path);
     }
 
-    return posix_spawn(pidp,path,fap,attrp, __argv,__envp);
+    int ret = posix_spawn(pidp,path,fap,attrp, __argv,__envp);
+    LOG("spawn ret=%d", ret);
+    return ret;
 }
 
 bool pathFileEqual(const char* path1, const char* path2)
@@ -580,6 +589,7 @@ void InitPatches(const char* path, void* header, uint64_t slide)
             break;
 
         case 0x2ea4e9938f958ba5:
+        case 0x37609b17aff715c6:
             hook_api_symbole(path, "access", (void*)my_access);
             hook_api_symbole(path, "posix_spawn", (void*)my_posix_spawn);
             break;

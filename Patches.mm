@@ -458,6 +458,11 @@ void InitPatches(const char* path, void* header, uint64_t slide)
         void* importSettingsFromNoContainerFilza = DobbySymbolResolver(FilzaPath, "_objc_msgSend$importSettingsFromNoContainerFilza");
         assert(importSettingsFromNoContainerFilza != NULL);
         DobbyHook((void*)importSettingsFromNoContainerFilza, (void*)new_importSettingsFromNoContainerFilza, (void**)&orig_importSettingsFromNoContainerFilza);
+
+        //skip symlinks when creating zip file
+        __CFString* ZipFileOptions = (__CFString*)(0x01007105F8 + slide);
+        ZipFileOptions->buffer = "-rqy";
+        ZipFileOptions->length = 4;
     }
 
     //test

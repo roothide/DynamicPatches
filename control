@@ -1,6 +1,6 @@
 Package: roothide.patches.filza
 Name: Patches for Filza 64bit
-Version: 0.1
+Version: 0.2
 Architecture: iphoneos-arm
 Description: RootHide Dynamic Patches For Filza
 Maintainer: roothide
